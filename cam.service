@@ -1,0 +1,12 @@
+[Unit]
+Description=cam of printer
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/web
+ExecStart=/usr/bin/python3 /home/pi/PrinterCam/main.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

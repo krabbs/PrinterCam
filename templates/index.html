@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming piCam und USB</title>
+    <style>
+        body {
+            background-color: #b8bad1;
+            font-family: Arial, sans-serif;
+            transition: background-color 0.3s ease;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s ease;
+        }
+        h3 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        video,
+        img {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 20px;
+        }
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+        .popup-image {
+            max-width: 80%;
+            max-height: 80%;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .show-popup {
+            display: flex;
+        }
+        .popup-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .mode-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px;
+            border: none;
+            background-color: transparent;
+            color: #333;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+        .mode-toggle:hover {
+            color: #fff;
+        }
+        .night-mode {
+            background-color: #222;
+            color: #fff;
+        }
+        .night-mode h3 {
+            color: #fff;
+        }
+        .night-mode .mode-toggle,
+        .night-mode button {
+            color: #fff;
+            background-color: transparent;
+            border: 1px solid #fff;
+            transition: color 0.3s ease, background-color 0.3s ease;
+        }
+        .night-mode .mode-toggle:hover,
+        .night-mode button:hover {
+            color: #333;
+            background-color: #fff;
+        }
+        /* Neue CSS-Regeln für die Knöpfe */
+        .start.prusa, .stop.prusa {
+            color: #fff;
+            padding: 10px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .start.prusa:hover, .stop.prusa:hover {
+            color: #333;
+            background-color: #fff;
+        }
+        .start.prusa {
+            background-color: green;
+        }
+        .stop.prusa {
+            background-color: red;
+        }
+    </style>
+    <script>
+        function toggleFullscreen(element) {
+            if (element.requestFullscreen) {
+                element.requestFullscreen();
+            } else if (element.mozRequestFullScreen) {
+                element.mozRequestFullScreen();
+            } else if (element.webkitRequestFullscreen) {
+                element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) {
+                element.msRequestFullscreen();
+            }
+        }
+        
+        
+        function sendCommand(command) {
+            // Hier AJAX-Anfrage an das Backend senden, um den Befehl zu verarbeiten
+            // Verwende z.B. XMLHttpRequest, fetch oder eine JavaScript-Bibliothek wie Axios
+            // Beispiel mit fetch:
+            fetch('/command', {
+                method: 'POST',
+                body: JSON.stringify({ command: command }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                // Verarbeite die Antwort des Backends, wenn nötig
+                console.log('Befehl gesendet: ' + command);
+            })
+            .catch(error => {
+                // Behandele Fehler, falls erforderlich
+                console.error('Fehler beim Senden des Befehls:', error);
+            });
+        }
+        
+        function showPopup(imageUrl) {
+            var overlay = document.querySelector('.popup-overlay');
+            var popupImage = document.querySelector('.popup-image');
+            
+            popupImage.src = imageUrl;
+            overlay.classList.add('show-popup');
+        }
+        
+        function closePopup() {
+            var overlay = document.querySelector('.popup-overlay');
+            
+            overlay.classList.remove('show-popup');
+        }
+        
+        function toggleMode() {
+            var body = document.body;
+            var container = document.querySelector('.container');
+            var modeToggle = document.querySelector('.mode-toggle');
+            
+            body.classList.toggle('night-mode');
+            container.classList.toggle('night-mode');
+            modeToggle.classList.toggle('night-mode');
+            
+            // Hier weitere Aktionen ausführen, die vom Moduswechsel abhängen
+            
+            // Beispiel: Hintergrundfarbe des Modus an das Backend senden
+            var mode = body.classList.contains('night-mode') ? 'night' : 'day';
+            sendCommand('changeMode', mode);
+        }
+        
+        // Überprüfe, ob das Systemdesign des Geräts den Dunkelmodus verwendet
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            toggleMode(); // Schalte in den Nachtmodus um
+            document.querySelector('.mode-toggle').style.color = '#fff'; // Schriftfarbe für den Moduswechsel-Knopf im dunklen Design auf weiß setzen
+        }
+        
+        // Funktion zum Aktualisieren der Knopffarben basierend auf dem Wert von prusaflag
+        function updatePrusaButtonColor(prusaflag) {
+            var startPrusaButton = document.querySelector('.start.prusa');
+            var stopPrusaButton = document.querySelector('.stop.prusa');
+
+            if (prusaflag) {
+                // Prusa ist aktiv (true) - Färbe die Knöpfe grün
+                startPrusaButton.style.backgroundColor = 'green';
+                stopPrusaButton.style.backgroundColor = 'green';
+            } else {
+                // Prusa ist inaktiv (false) - Färbe die Knöpfe rot
+                startPrusaButton.style.backgroundColor = 'red';
+                stopPrusaButton.style.backgroundColor = 'red';
+            }
+        }
+
+        // Funktion zum Aktualisieren der Knopffarben basierend auf dem Wert von timelapse_flag
+        function updateTimelapseButtonColor(timelapse_flag) {
+            var startTimelapseButton = document.querySelector('.start.timelapse');
+            var stopTimelapseButton = document.querySelector('.stop.timelapse');
+
+            if (timelapse_flag) {
+                // Timelapse ist aktiv (true) - Färbe die Knöpfe grün
+                startTimelapseButton.style.backgroundColor = 'green';
+                stopTimelapseButton.style.backgroundColor = 'green';
+            } else {
+                // Timelapse ist inaktiv (false) - Färbe die Knöpfe rot
+                startTimelapseButton.style.backgroundColor = 'red';
+                stopTimelapseButton.style.backgroundColor = 'red';
+            }
+        }
+
+        // Funktion zum Empfangen des JSON-Objekts und Aktualisieren der Knopffarben
+        function handleJSONResponse(response) {
+            var json = JSON.parse(response);
+            var prusaflag = json.prusa;
+            var timelapse_flag = json.timelapse_flag;
+            updatePrusaButtonColor(prusaflag);
+            updateTimelapseButtonColor(timelapse_flag);
+        }
+
+        // Funktion, um das JSON-Objekt abzurufen und die Knöpfe zu aktualisieren
+        function fetchJSONAndUpdateButtons() {
+            fetch('/json')
+                .then(response => response.json())
+                .then(json => handleJSONResponse(JSON.stringify(json)))
+                .catch(error => console.error('Fehler beim Abrufen des JSON-Objekts:', error));
+        }
+
+        // Zyklische Aktualisierung der Knopffarben alle 3 Sekunden (3000 Millisekunden)
+        setInterval(fetchJSONAndUpdateButtons, 3000); // Ändere die Zeitintervall nach Bedarf
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <img src="{{ url_for('video_feedA') }}" ondblclick="toggleFullscreen(this); sendCommand('startStreamingA')" onclick="sendCommand('startStreamingA')">
+                <button onclick="showPopup('{{ url_for('shotA') }}')">Bild anzeigen</button>
+            </div>
+            <div class="col-lg-8 offset-lg-2">
+                <h3 class="mt-5">Streaming Box</h3>
+                <img src="{{ url_for('video_feedB') }}" ondblclick="toggleFullscreen(this); sendCommand('startStreamingB')" onclick="sendCommand('startStreamingB')">
+                <button onclick="showPopup('{{ url_for('shotB') }}')">Bild anzeigen</button>
+            </div>
+            <video loop autoplay>
+                <source src="{{ url_for('video_feedB') }}" type="video/mp4">
+            </video>
+        </div>
+    </div>
+    <div class="popup-overlay">
+        <span class="popup-close" onclick="closePopup()">&times;</span>
+        <img class="popup-image" src="" alt="Popup Image">
+    </div>
+    <button class="mode-toggle" onclick="toggleMode()">Modus wechseln</button>
+    <button class="start timelapse" onclick="sendCommand('startTimelapse')">start Timelapse</button>
+    <button class="stop timelapse" onclick="sendCommand('stopTimelapse')">stop Timelapse</button>
+    <button class="render timelapse" onclick="sendCommand('renderTimelapse')">render Timelapse</button>
+    <button class="start prusa" onclick="sendCommand('startprusa')">start Prusa</button>
+    <button class="stop prusa" onclick="sendCommand('stopprusa')">stop Prusa</button>
+</body>
+</html>
