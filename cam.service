@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 User=pi
-WorkingDirectory=/home/pi/web
+WorkingDirectory=/home/pi/PrinterCam
 ExecStart=/usr/bin/python3 /home/pi/PrinterCam/main.py
 Restart=always
 

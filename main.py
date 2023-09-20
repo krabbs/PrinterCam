@@ -11,14 +11,17 @@ import os
 # load .env-Datei
 load_dotenv()
 
+HTTP_URL = "https://webcam.connect.prusa3d.com/c/snapshot"
+
 # read as global variables
-FINGERPRINT = os.getenv("FINGERPRINT")
-TOKEN = os.getenv("TOKEN")
+FINGERPRINTA = os.getenv("FINGERPRINTA")
+TOKENA = os.getenv("TOKENA")
+
+FINGERPRINTB = os.getenv("FINGERPRINTB")
+TOKENB = os.getenv("TOKENB")
+
 camera1_name = os.getenv("camera1_name")
 camera2_name = os.getenv("camera2_name")
-
-print(FINGERPRINT)
-print(TOKEN)
 
 # Pre-source definition if auto-detect is wrong 
 camera1 = 0
@@ -83,6 +86,7 @@ def video_feedB():
         
 @app.route('/command', methods=['POST'])
 def handle_command():
+    print(request)
     data = request.get_json()
     command = data.get('command')
     if command == 'startStreamingA':
@@ -111,7 +115,7 @@ def handle_command():
         VideoCamera.stopprusa()
     elif command == 'startprusa':
         print("Start prusa service")
-        VideoCamera.startprusa(camera1, camera2)
+        VideoCamera.startprusa(HTTP_URL, camera1, FINGERPRINTA, TOKENA, camera2, FINGERPRINTB, TOKENB)
     elif command == 'resetcam':
         print("rest cam")
         VideoCamera.resetcam(camera1, camera2)
@@ -147,10 +151,10 @@ if __name__ == '__main__':
     camera2=VideoCamera.get_camera(camera2_name)
     #cameras=(VideoCamera.list_ports()[1])
     print("Kamera1: " + str(camera1) + " Kamera2: " +str(camera2))
-    print("Start prusa service")
-    VideoCamera.startprusa(camera1, camera2)
+    VideoCamera.startprusa(HTTP_URL, camera1, FINGERPRINTA, TOKENA, camera2, FINGERPRINTB, TOKENB)
+    #VideoCamera.startprusa(camera1, camera2)
     print("Computing...")
-    VideoCamera.renderTimelapse()
+  #  VideoCamera.renderTimelapse()
     ##Timelapse Autostart
     #print("Start Timelapse")
     #VideoCamera.starttimelapse(camera1)

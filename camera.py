@@ -24,7 +24,6 @@ except ImportError:
     except ImportError:
         from _thread import get_ident
 
-
 class VideoCamera(object):
     max_cams = 3
     timelapse = None
@@ -52,6 +51,8 @@ class VideoCamera(object):
     streamCount = [0] * max_cams
     pxl_H = [480] * max_cams
     pxl_V = [640] * max_cams
+    pxl_H_hres = [1080] * max_cams
+    pxl_V_hres = [1920] * max_cams
     last_access = [0] * max_cams
     errorFrames = [0] * max_cams
     thread_events = True
@@ -433,20 +434,10 @@ class VideoCamera(object):
         print('Warn: Stopping camera thread. For cam: ' +  str(cam))             
     
     @staticmethod          
-    def prusaA(image):
-        HTTP_URL = "https://webcam.connect.prusa3d.com/c/snapshot"
-        FINGERPRINT = "809ae2eb2057370016d4e14ead5bf2ef801ee71d"
-        TOKEN = "1LZxPWTJx6aq26N0Z4jq"
+    def prusa_send(image, HTTP_URL, FINGERPRINT, TOKEN):
         response = VideoCamera.upload_image(HTTP_URL, FINGERPRINT, TOKEN, image)
-        print(response)
-        
-    @staticmethod          
-    def prusaB(image):
-        global FINGERPRINT
-        global TOKEN
-        HTTP_URL = "https://webcam.connect.prusa3d.com/c/snapshot"
-        response = VideoCamera.upload_image(HTTP_URL, FINGERPRINT, TOKEN, image)
-        print(response)
+        print("prusa upload"+ str(response))
+
 
     def upload_image(http_url, fingerprint, token, image):
         response = requests.put(
@@ -497,9 +488,10 @@ class VideoCamera(object):
         print('Warn: STTOPPING camera thread. For cam: ' + str(cam))
           
     @classmethod
-    def startprusa(cls, camera1, camera2):
+    def startprusa(cls, HTTP_URL, camera1, FINGERPRINTA, TOKENA, camera2, FINGERPRINTB, TOKENB):
+       print("Start prusa service")
        if VideoCamera.prusa is None:
-         VideoCamera.prusa = threading.Thread(target=cls._prusathread, daemon=False, args=(camera1, camera2))
+         VideoCamera.prusa = threading.Thread(target=cls._prusathread, daemon=False, args=(HTTP_URL, camera1, FINGERPRINTA, TOKENA, camera2, FINGERPRINTB, TOKENB))
          VideoCamera.prusa.start()
          
     @classmethod
@@ -586,13 +578,13 @@ class VideoCamera(object):
          print("timelapse not running")
      
     @classmethod
-    def _prusathread(cls, camera1, camera2):
+    def _prusathread(cls, HTTP_URL, camera1, FINGERPRINTA, TOKENA, camera2, FINGERPRINTB, TOKENB):
         while VideoCamera.prusa is not None:
             #time.sleep(20)
             snap1=VideoCamera(camera1, "printer", 270, True).get_frame(True)
             snap2=VideoCamera(camera2, "box", 180, True).get_frame(True)
-            VideoCamera.prusaA(snap1)
-            VideoCamera.prusaB(snap2)
+            VideoCamera.prusa_send(snap1, HTTP_URL, FINGERPRINTA, TOKENA)
+            VideoCamera.prusa_send(cls, snap2, HTTP_URL, FINGERPRINTB, TOKENB)
             time.sleep(20) 
         
     @classmethod
@@ -622,14 +614,23 @@ class VideoCamera(object):
      if not os.path.exists("timelapse"):
          os.mkdir("timelapse")
      # Get the current date and time.
-     
+     hres_timelapse=True
      now = datetime.today()
      date = now.strftime("%Y-%m-%d")
      timehm = now.strftime("%H-%M")
- 
+     if hres_timelapse:
+       width = VideoCamera.pxl_H_hres[cam]
+       height = VideoCamera.pxl_V_hres[cam]
+     else:
+       width = VideoCamera.pxl_H[cam]
+       height = VideoCamera.pxl_V[cam]
+     print("width: " + str(width) + " height: " + str(height))
      # Create a folder in the timelapse folder with the current date and time.
      VideoCamera.timelapse_folder = os.path.join(os.path.dirname(os.path.realpath(__file__)), "timelapse", date + "_" + timehm)
      VideoCamera.timelapse_folder_old = os.path.join(os.path.dirname(os.path.realpath(__file__)), "timelapse", date + "_" + timehm + "_old")
+     out_file = os.path.join(VideoCamera.timelapse_folder, "timelapse.avi")
+     out_file_old = os.path.join(VideoCamera.timelapse_folder_old, "timelapse.avi")
+     # choose codec according to format needed
      print("Folder Timelapse: " + str(VideoCamera.timelapse_folder))
      if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), "timelapse")):
          os.mkdir(os.path.join(os.path.dirname(os.path.realpath(__file__)), "timelapse"))
@@ -637,8 +638,11 @@ class VideoCamera(object):
          os.mkdir(VideoCamera.timelapse_folder)
      if not os.path.exists(VideoCamera.timelapse_folder_old):
          os.mkdir(VideoCamera.timelapse_folder_old)
+     fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+     video = cv2.VideoWriter(out_file, fourcc, 12, (width, height))
+     video_old = cv2.VideoWriter(out_file_old, fourcc, 12, (width, height))
      print("Timelapse started")
-     time.sleep(span)
+     #time.sleep(span)
      last_compare_image = b''
      image = b''
      best_image = image
@@ -655,7 +659,7 @@ class VideoCamera(object):
          framesshot_time = []
          while takeShots:
              if not VideoCamera.timelapse_flag: break
-             frame = timelapseCam.get_frame(ss=True, hres=False)
+             frame = timelapseCam.get_frame(ss=True, hres=hres_timelapse)
              framesshot.append(frame)
              framesshot_time.append(time.time())
              #takeShotsCount+=1
@@ -672,10 +676,13 @@ class VideoCamera(object):
            image_array = np.frombuffer(frame, np.uint8)
            image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-           if (index==0):
-            file_name_o = os.path.join(VideoCamera.timelapse_folder_old, "%d.jpg" % (time.time()))
-            cv2.imwrite(file_name_o, image)
-            last_compare_image=gray_image
+           if(index==0):
+             file_name_o = os.path.join(VideoCamera.timelapse_folder_old, "%d.jpg" % (time.time()))
+             #cv2.imwrite(file_name_o, image)
+             video_old.write(image)
+           if (loop==0):
+             print("first image of timelapse shot") 
+             last_compare_image=gray_image
            #try: 
            score, diff = ssim(last_compare_image, gray_image, full=True)
            #calculation_time = time.time() - calculation_time
@@ -687,6 +694,8 @@ class VideoCamera(object):
              best_shot = index
              best_shot_time=framesshot_time[index]
              best_image = image
+             #best_frame = frame
+             best_gray_image = gray_image
                 # diff = (diff * 255).astype("uint8")
                 # diff_box = cv2.merge([diff, diff, diff])
                 # dif_b = diff_box   
@@ -694,10 +703,11 @@ class VideoCamera(object):
            #print("An exception occurred")
          print("Shot " + str(best_shot) + " saved") 
          file_name = os.path.join(VideoCamera.timelapse_folder, "%d.jpg" %best_shot_time)
-         cv2.imwrite(file_name, best_image)
+         #cv2.imwrite(file_name, best_image)
+         video.write(best_image)
          #file_name_dif = os.path.join(VideoCamera.timelapse_folder, "%d_dif.jpg" % (time.time()))
          #cv2.imwrite(file_name_dif, dif_b)         
-         last_compare_image=gray_image
+         last_compare_image=best_gray_image
          end_loop = time.time()
          dif_loop = end_loop - start_loop
          wait_time = end_loop - (best_shot_time + span)
