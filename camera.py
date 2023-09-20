@@ -584,7 +584,7 @@ class VideoCamera(object):
             snap1=VideoCamera(camera1, "printer", 270, True).get_frame(True)
             snap2=VideoCamera(camera2, "box", 180, True).get_frame(True)
             VideoCamera.prusa_send(snap1, HTTP_URL, FINGERPRINTA, TOKENA)
-            VideoCamera.prusa_send(cls, snap2, HTTP_URL, FINGERPRINTB, TOKENB)
+            VideoCamera.prusa_send(snap2, HTTP_URL, FINGERPRINTB, TOKENB)
             time.sleep(20) 
         
     @classmethod
