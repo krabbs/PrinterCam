@@ -28,6 +28,7 @@ class VideoCamera(object):
     max_cams = 3
     timelapse = None
     timelapse_flag = False
+    hres_timelapse = False
     timelapse_folder = None
     prusa = None
     event = [None] * max_cams
@@ -49,10 +50,13 @@ class VideoCamera(object):
     lasttime = [0] * max_cams
     cameraState = [False] * max_cams
     streamCount = [0] * max_cams
-    pxl_H = [480] * max_cams
-    pxl_V = [640] * max_cams
-    pxl_H_hres = [1080] * max_cams
-    pxl_V_hres = [1920] * max_cams
+    pxl_H_act = [0] * max_cams
+    pxl_V_act = [0] * max_cams
+    pxl_H = [800] * max_cams
+    pxl_V = [600] * max_cams
+    pxl_hres_lock = [False] * max_cams
+    pxl_H_hres = [1920] * max_cams
+    pxl_V_hres = [1080] * max_cams
     last_access = [0] * max_cams
     errorFrames = [0] * max_cams
     thread_events = True
@@ -163,16 +167,14 @@ class VideoCamera(object):
             #VideoCamera.video[cam].set(cv2.CAP_PROP_BUFFERSIZE, 2)
             if VideoCamera.description[cam] == "printer":
                 VideoCamera.targetfps[cam] = 15  # 30#24#20#15#10#7#5
-                VideoCamera.pxl_V[cam] = 800  # 1920 #1280 #800
-                VideoCamera.pxl_H[cam] = 600
+                VideoCamera.pxl_V_act[cam] = 600  # 1920 #1280 #800
+                VideoCamera.pxl_H_act[cam] = 800
             # VideoCamera.video[cam].set(cv2.CAP_PROP_AUTO_EXPOSURE, 3) # auto mode
             # VideoCamera.video[cam].set(cv2.CAP_PROP_AUTO_EXPOSURE, 1) # manual mode
             # VideoCamera.video[cam].set(cv2.CAP_PROP_EXPOSURE, 40)
             VideoCamera.video[cam].set(cv2.CAP_PROP_FPS, VideoCamera.targetfps[cam])
-            VideoCamera.video[cam].set(
-                cv2.CAP_PROP_FRAME_WIDTH, VideoCamera.pxl_V[cam])
-            VideoCamera.video[cam].set(
-                cv2.CAP_PROP_FRAME_HEIGHT, VideoCamera.pxl_H[cam])
+            VideoCamera.video[cam].set(cv2.CAP_PROP_FRAME_WIDTH, VideoCamera.pxl_H[cam])
+            VideoCamera.video[cam].set(cv2.CAP_PROP_FRAME_HEIGHT, VideoCamera.pxl_V[cam])
             if warmup:
                 print("warm up: " + str(cam))
                 for i in range(4):
@@ -205,21 +207,31 @@ class VideoCamera(object):
             return True
 
     def setFPS(cam, fps):
-        VideoCamera.targetfps[cam] = fps
-        VideoCamera.setProb(cam, cv2.CAP_PROP_FPS, fps)
+        if VideoCamera.setProb(cam, cv2.CAP_PROP_FPS, fps): VideoCamera.targetfps[cam] = fps
 
     def setProb(cam, arg1, arg2):
+        suc = False
+        if (VideoCamera.video[cam].get(arg1) == arg2):
+          #print("cam " + str(cam) + ": Prob already set." + " arg: " + str(arg1) +" -> " + str(arg2))
+          return True
         if VideoCamera.video[cam] is not None:    
-          VideoCamera.unlock.clear()
+          #VideoCamera.unlock.clear()
           if VideoCamera.video[cam].isOpened():
-              VideoCamera.video[cam].release()
-              VideoCamera.video[cam] = cv2.VideoCapture(cam, cv2.CAP_V4L2)
-              time.sleep(1)
-              VideoCamera.video[cam].set(arg1, arg2)
-              time.sleep(1)
+               #change FPS needs to release Camera in my Case
+              if(arg1==cv2.CAP_PROP_FPS):
+                VideoCamera.video[cam].release() 
+                VideoCamera.video[cam] = cv2.VideoCapture(cam, cv2.CAP_V4L2)
+              suc = VideoCamera.video[cam].set(arg1, arg2)
+              #time.sleep(1)
           else:
-              VideoCamera.video[cam].set(arg1, arg2)
-          VideoCamera.unlock.set()
+              suc = VideoCamera.video[cam].set(arg1, arg2)
+          #VideoCamera.unlock.set()
+        if suc:
+           print("cam " + str(cam) + " arg: " + str(arg1) +" -> " + str(arg2))
+           return True
+        else:
+           print("Failed: cam " + str(cam) + " arg: " + str(arg1) +" -> " + str(arg2))
+           return False
 
     # @classmethod
     def setFPStime(cam, time):
@@ -287,20 +299,39 @@ class VideoCamera(object):
         cam = self.camera_obj_source
         ident = get_ident()
         VideoCamera.last_access[cam] = time.time()
+        if hres:
+            VideoCamera.unlock.clear()
+            VideoCamera.pxl_hres_lock[cam]=True
+            if not (VideoCamera.pxl_V_act[cam]==VideoCamera.pxl_V_hres[cam]) and not (VideoCamera.pxl_H_act[cam]==VideoCamera.pxl_H_hres[cam]):
+              if VideoCamera.setProb(cam, cv2.CAP_PROP_FRAME_WIDTH, VideoCamera.pxl_H_hres[cam]): VideoCamera.pxl_H_act[cam] = VideoCamera.pxl_H_hres[cam]
+              if VideoCamera.setProb(cam, cv2.CAP_PROP_FRAME_HEIGHT, VideoCamera.pxl_V_hres[cam]): VideoCamera.pxl_V_act[cam] = VideoCamera.pxl_V_hres[cam]
+              time.sleep(1)
+            VideoCamera.unlock.set()
+        else:
+            VideoCamera.unlock.clear()
+            if not (VideoCamera.pxl_V_act[cam]==VideoCamera.pxl_V[cam]) and not (VideoCamera.pxl_H_act[cam]==VideoCamera.pxl_H[cam]) and VideoCamera.pxl_hres_lock[cam]==False:
+              if VideoCamera.setProb(cam, cv2.CAP_PROP_FRAME_WIDTH, VideoCamera.pxl_H[cam]): VideoCamera.pxl_H_act[cam] = VideoCamera.pxl_H[cam]
+              if VideoCamera.setProb(cam, cv2.CAP_PROP_FRAME_HEIGHT, VideoCamera.pxl_V[cam]): VideoCamera.pxl_V_act[cam] = VideoCamera.pxl_V[cam]
+              time.sleep(1)
+            VideoCamera.unlock.set()
         if ss:
-            print("Single Shot")
+            VideoCamera.unlock.clear()
             if hres:
-                VideoCamera.req[cam].set()
-                ss = VideoCamera.frame(cam, TIMEdata=True, FPSdata=False, hres=True)
+                print("Single high-res Shot")
+                ss = VideoCamera.frame(cam, TIMEdata=True, FPSdata=True)
+                VideoCamera.pxl_hres_lock[cam]=False
             else:
-                ss = VideoCamera.frame(cam, TIMEdata=True, FPSdata=False)
+                print("Single Shot")
+                ss = VideoCamera.frame(cam, TIMEdata=True, FPSdata=True)
+            VideoCamera.unlock.set()
             return ss
+
         if VideoCamera.thread_events:
             #print(str(cam)+" Thread request: " + str(ident))
             VideoCamera.req[cam].set()
             time.sleep(0.03)
             #print(str(cam)+" Thread wait: " + str(ident))
-            if not VideoCamera.event[cam].wait(1.2): print(str(cam)+" Warn: Thread event fail: " + str(ident))
+            if not VideoCamera.event[cam].wait(2): print(str(cam)+" Warn: Thread event fail: " + str(ident))
             #print(str(cam)+" Thread event: " + str(ident))
             VideoCamera.event[cam].clear()
         if VideoCamera.lastImage[cam] == b'':
@@ -310,18 +341,8 @@ class VideoCamera(object):
         else:
             return VideoCamera.lastImage[cam]
 
-    def frame(cam, TIMEdata=True, FPSdata=True, hres=False):
-        # read current frame
-        if hres:
-            VideoCamera.video[cam].set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-            VideoCamera.video[cam].set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-            success, img = VideoCamera.video[cam].read()
-            VideoCamera.video[cam].set(
-                cv2.CAP_PROP_FRAME_WIDTH, VideoCamera.pxl_V[cam])
-            VideoCamera.video[cam].set(
-                cv2.CAP_PROP_FRAME_HEIGHT, VideoCamera.pxl_H[cam])
-        else:
-            success, img = VideoCamera.video[cam].read()
+    def frame(cam, TIMEdata=True, FPSdata=True):
+        success, img = VideoCamera.video[cam].read()
         if success:
             VideoCamera.errorFrames[cam] = 0
             if VideoCamera.rotate[cam] == 180:
@@ -335,12 +356,10 @@ class VideoCamera(object):
             return cv2.imencode('.jpg', img)[1].tobytes()
         else:
             VideoCamera.errorFrames[cam] +=1
+            print("error Frame count:" + str(VideoCamera.errorFrames[cam]))
             return b''
 
     def frames(cam, TIMEdata=True, FPSdata=True):
-        # print(TIMEdata)
-        # print(FPSdata)
-        # cam = self.camera_obj_source
         while True:
             # read current frame
             if VideoCamera.video[cam] is not None:
@@ -358,6 +377,7 @@ class VideoCamera(object):
                   yield cv2.imencode('.jpg', img)[1].tobytes()
               else:
                   VideoCamera.errorFrames[cam] +=1
+                  print("error Frame count:" + str(VideoCamera.errorFrames[cam]))
                   yield b''
             else:
               yield b''
@@ -365,6 +385,11 @@ class VideoCamera(object):
     @staticmethod
     def addData(image, cam, TIMEdata=True, FPSdata=True):
         # Write some Text
+        #dimensions = image.shape
+        # height, width, number of channels in image
+        height = VideoCamera.pxl_V_act[cam]
+        width = VideoCamera.pxl_H_act[cam]
+        
         time_now = datetime.now()
         current_time = time_now.strftime("%H:%M:%S")
         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -376,7 +401,7 @@ class VideoCamera(object):
         # print(TIMEdata)
         # print(FPSdata)
         if TIMEdata and FPSdata:
-            image = cv2.putText(image, current_time + ' FPS: ' + str('{:.0f}'.format(round(VideoCamera.fps[cam], 0)))+"/"+str(VideoCamera.targetfps[cam]),
+            image = cv2.putText(image, current_time + ' FPS: ' + str('{:.0f}'.format(round(VideoCamera.fps[cam], 0)))+"/"+str(VideoCamera.targetfps[cam])+ " " + str(width) + "x" + str(height),
                                 bottomLeftCornerOfText,
                                 font,
                                 fontScale,
@@ -408,7 +433,7 @@ class VideoCamera(object):
                     # print(str(cam)+" Backgroundthread lock: " + str(ident))
                     if VideoCamera.thread_events:
                         if not VideoCamera.unlock.wait(5):
-                          #print(str(cam)+"Warn: Backgroundthread locked. timout for cam: " + str(ident))
+                          print(str(cam)+"Warn: Backgroundthread locked. timout for cam: " + str(ident))
                           time.sleep(0)
                         #print(str(cam)+" Backgroundthread unlocked and wait for request: " + str(ident))
                         if not VideoCamera.req[cam].wait(1): 
@@ -485,7 +510,7 @@ class VideoCamera(object):
                   #print("Call to fast for  buffer cam " + str(cam))
                    if VideoCamera.thread_events: VideoCamera.req[cam].set()
               time.sleep(0.03)
-        print('Warn: STTOPPING camera thread. For cam: ' + str(cam))
+        print('Warn: STOPPING camera thread. For cam: ' + str(cam))
           
     @classmethod
     def startprusa(cls, HTTP_URL, camera1, FINGERPRINTA, TOKENA, camera2, FINGERPRINTB, TOKENB):
@@ -593,10 +618,10 @@ class VideoCamera(object):
         while VideoCamera.DAEMONthread_runflag[cam]:
             for sleep in range(45):
               time.sleep(1)
-              if VideoCamera.errorFrames[cam] > 0:
-                print("warn: too much error frames....resetting: " + str(cam))
+              if VideoCamera.errorFrames[cam] > VideoCamera.fps[cam]:
+                print("warn: too much error frames (" + str(VideoCamera.errorFrames[cam]) +") ....resetting: " + str(cam))
                 VideoCamera.errorFrames[cam] = 0
-                #VideoCamera.resetcam(cam)
+                VideoCamera.resetcam(cam)
               if not VideoCamera.DAEMONthread_runflag[cam]: return
             lastClient = time.time() - VideoCamera.last_access[cam]
             if lastClient > 15: print("Watchdog cam: " + VideoCamera.description[cam] + "letztes Update vor: " + str(round(lastClient,2)))
@@ -609,21 +634,21 @@ class VideoCamera(object):
             #VideoCamera.DAEMONthread[cam] = None
             
     @classmethod        
-    def _timelapse(cls, cam, time_run=22000, span=45, shots=10):
+    def _timelapse(cls, cam, time_run=22000, span=45, shots=12):
      # Create the timelapse folder in the home directory.
      if not os.path.exists("timelapse"):
          os.mkdir("timelapse")
      # Get the current date and time.
-     hres_timelapse=True
+     hres_timelapse=VideoCamera.hres_timelapse
      now = datetime.today()
      date = now.strftime("%Y-%m-%d")
      timehm = now.strftime("%H-%M")
      if hres_timelapse:
-       width = VideoCamera.pxl_H_hres[cam]
-       height = VideoCamera.pxl_V_hres[cam]
+       width = VideoCamera.pxl_V_hres[cam]
+       height = VideoCamera.pxl_H_hres[cam]
      else:
-       width = VideoCamera.pxl_H[cam]
-       height = VideoCamera.pxl_V[cam]
+       width = VideoCamera.pxl_V[cam]
+       height = VideoCamera.pxl_H[cam]
      print("width: " + str(width) + " height: " + str(height))
      # Create a folder in the timelapse folder with the current date and time.
      VideoCamera.timelapse_folder = os.path.join(os.path.dirname(os.path.realpath(__file__)), "timelapse", date + "_" + timehm)
@@ -642,11 +667,14 @@ class VideoCamera(object):
      video = cv2.VideoWriter(out_file, fourcc, 12, (width, height))
      video_old = cv2.VideoWriter(out_file_old, fourcc, 12, (width, height))
      print("Timelapse started")
+     
      #time.sleep(span)
+     
      last_compare_image = b''
      image = b''
      best_image = image
      dif_b = image
+     
      for loop in range(time_run):
          if not VideoCamera.timelapse_flag: break
          start_loop = time.time()
@@ -657,25 +685,31 @@ class VideoCamera(object):
          #takeShotsCount=0
          framesshot = []
          framesshot_time = []
+         shooting = 0
          while takeShots:
              if not VideoCamera.timelapse_flag: break
-             frame = timelapseCam.get_frame(ss=True, hres=hres_timelapse)
+             if(loop>0 and shooting==0): print("record timelapse snipped")
+             frame = timelapseCam.get_frame(ss=False, hres=hres_timelapse)
              framesshot.append(frame)
+             shooting += 1
              framesshot_time.append(time.time())
              #takeShotsCount+=1
              if (((time.time() - start_loop) > shots) or (loop==0)) and  (frame != b''): 
                takeShots=False
-             else: time.sleep(0.2)
+             else: time.sleep(0.4)
+         time.sleep(1)
+         VideoCamera.pxl_hres_lock[cam]=False
          print("Auswertung von Photos: " + str(len(framesshot)))
          best_s = 0
          best_shot = 0
+         best_shot_time = 0
          for index, frame in enumerate(framesshot):
            if not VideoCamera.timelapse_flag: break
            #calculation_time = time.time()
            time.sleep(0.2)
            image_array = np.frombuffer(frame, np.uint8)
            image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
-           gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+           gray_image = VideoCamera.image_resize(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 600)
            if(index==0):
              file_name_o = os.path.join(VideoCamera.timelapse_folder_old, "%d.jpg" % (time.time()))
              #cv2.imwrite(file_name_o, image)
@@ -710,7 +744,7 @@ class VideoCamera(object):
          last_compare_image=best_gray_image
          end_loop = time.time()
          dif_loop = end_loop - start_loop
-         wait_time = end_loop - (best_shot_time + span)
+         wait_time = -1*(end_loop - (best_shot_time + span))
          if not VideoCamera.timelapse_flag: break
          print("Time of loop: "+ str(dif_loop) + "s Time to wait: " + str(wait_time) + "s")
          if wait_time>0: time.sleep(wait_time)
@@ -718,7 +752,6 @@ class VideoCamera(object):
 
 	
     def get_camera_settings_json():
-       print("json")
        if VideoCamera.prusa is not None: prusaflag=True
        else: prusaflag=False
        camera_param = {

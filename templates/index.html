@@ -91,24 +91,7 @@
             color: #333;
             background-color: #fff;
         }
-        /* Neue CSS-Regeln für die Knöpfe */
-        .start.prusa, .stop.prusa {
-            color: #fff;
-            padding: 10px;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        .start.prusa:hover, .stop.prusa:hover {
-            color: #333;
-            background-color: #fff;
-        }
-        .start.prusa {
-            background-color: green;
-        }
-        .stop.prusa {
-            background-color: red;
-        }
+
     </style>
     <script>
         function toggleFullscreen(element) {
@@ -231,7 +214,7 @@
         }
 
         // Zyklische Aktualisierung der Knopffarben alle 3 Sekunden (3000 Millisekunden)
-        setInterval(fetchJSONAndUpdateButtons, 3000); // Ändere die Zeitintervall nach Bedarf
+        setInterval(fetchJSONAndUpdateButtons, 15000); // Ändere die Zeitintervall nach Bedarf
     </script>
 </head>
 <body>
@@ -258,7 +241,7 @@
     <button class="mode-toggle" onclick="toggleMode()">Modus wechseln</button>
     <button class="start timelapse" onclick="sendCommand('startTimelapse')">start Timelapse</button>
     <button class="stop timelapse" onclick="sendCommand('stopTimelapse')">stop Timelapse</button>
-    <button class="render timelapse" onclick="sendCommand('renderTimelapse')">render Timelapse</button>
+    <button class="resetcam" onclick="sendCommand('resetcam')">reset cam</button>
     <button class="start prusa" onclick="sendCommand('startprusa')">start Prusa</button>
     <button class="stop prusa" onclick="sendCommand('stopprusa')">stop Prusa</button>
 </body>

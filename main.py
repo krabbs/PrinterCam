@@ -69,10 +69,23 @@ def shotA():
     snap1=VideoCamera(camera1, "printer", 270, True).get_frame(True, True)
     mimetype = 'image/jpeg'
     return Response(snap1, mimetype=mimetype)
+@app.route('/shotA_LQ')
+def shotA_LQ():
+    snap1=VideoCamera(camera1, "printer", 270, True).get_frame(True, False)
+    mimetype = 'image/jpeg'
+    return Response(snap1, mimetype=mimetype)
+
 
 @app.route('/shotB')
 def shotB():
     snap2=VideoCamera(camera2, "box", 180, True).get_frame(True, True)
+    mimetype = 'image/jpeg'
+    # Rückgabe der Bildantwort
+    return Response(snap2, mimetype=mimetype)
+    
+@app.route('/shotB_LQ')
+def shotB_LQ():
+    snap2=VideoCamera(camera2, "box", 180, True).get_frame(True, False)
     mimetype = 'image/jpeg'
     # Rückgabe der Bildantwort
     return Response(snap2, mimetype=mimetype)
@@ -86,23 +99,23 @@ def video_feedB():
         
 @app.route('/command', methods=['POST'])
 def handle_command():
-    print(request)
+    #print(request)
     data = request.get_json()
     command = data.get('command')
     if command == 'startStreamingA':
         print('Streaming A gestartet')
-        VideoCamera.setFPS(camera1, 20)
+        VideoCamera.setFPS(camera1, 30)
         VideoCamera.setFPS(camera2, 5)
     elif command == 'stopStreamingA':
-        VideoCamera.setFPS(camera1, 20)
+        VideoCamera.setFPS(camera1, 15)
         VideoCamera.setFPS(camera2, 5)
         print('Streaming A gestoppt')
     elif command == 'startStreamingB':
         print('Streaming B gestartet')
         VideoCamera.setFPS(camera1, 5)
-        VideoCamera.setFPS(camera2, 20)
+        VideoCamera.setFPS(camera2, 30)
     elif command == 'stopStreamingB':
-        VideoCamera.setFPS(camera1, 20)
+        VideoCamera.setFPS(camera1, 15)
         VideoCamera.setFPS(camera2, 5)
         print('Streaming B gestoppt')
     elif command == 'startTimelapse':
@@ -132,8 +145,8 @@ def handle_command():
 def add_message(cmd):
     json = request.json
     content=json
-    print(cmd)
-    print(content)
+    #print(cmd)
+    #print(content)
     if content: VideoCamera.startprusa(camera1, camera2)
     elif not content=="False": VideoCamera.stopprusa()
     return jsonify({"cmd":cmd})
@@ -154,7 +167,7 @@ if __name__ == '__main__':
     VideoCamera.startprusa(HTTP_URL, camera1, FINGERPRINTA, TOKENA, camera2, FINGERPRINTB, TOKENB)
     #VideoCamera.startprusa(camera1, camera2)
     print("Computing...")
-  #  VideoCamera.renderTimelapse()
+    VideoCamera.renderTimelapse()
     ##Timelapse Autostart
     #print("Start Timelapse")
     #VideoCamera.starttimelapse(camera1)
